@@ -35,7 +35,7 @@ import com.nimbusds.jose.proc.SecurityContext;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
-
+import com.example.authserver.security.GoogleOidcUserService;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.interfaces.RSAPrivateKey;
@@ -70,7 +70,8 @@ public class AuthorizationServerConfig {
     // Filter chain #2 — everything else: the login page itself
     @Bean
     @Order(2)
-    public SecurityFilterChain defaultSecurityFilterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain defaultSecurityFilterChain(HttpSecurity http,
+                                                          GoogleOidcUserService googleOidcUserService) throws Exception {
         http
                 .cors(Customizer.withDefaults())
                 .csrf(csrf -> csrf.ignoringRequestMatchers("/register"))
@@ -79,6 +80,10 @@ public class AuthorizationServerConfig {
                         .anyRequest().authenticated()
                 )
                 .formLogin(form -> form.defaultSuccessUrl("http://localhost:5173/login", false))
+                .oauth2Login(oauth -> oauth
+                        .defaultSuccessUrl("http://localhost:5173/login", false)
+                        .userInfoEndpoint(userInfo -> userInfo.oidcUserService(googleOidcUserService))
+                )
                 .logout(logout -> logout.logoutSuccessUrl("http://localhost:5173/login"));
 
         return http.build();

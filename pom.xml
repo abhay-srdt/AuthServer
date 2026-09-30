@@ -48,6 +48,11 @@
             <artifactId>spring-boot-starter-security</artifactId>
         </dependency>
 
+        <!-- Lets AuthServer log users in with Google (acts as an OAuth2 client) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security-oauth2-client</artifactId>
+        </dependency>
         <!-- JPA, for your User entity/repository -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
