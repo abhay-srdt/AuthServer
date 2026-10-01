@@ -1,5 +1,4 @@
 package com.example.authserver.config;
-
 import com.example.authserver.repository.UserRepository;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -14,6 +13,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.core.AuthorizationGrantType;
 import org.springframework.security.oauth2.core.ClientAuthenticationMethod;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
+import org.springframework.security.oauth2.client.web.DefaultOAuth2AuthorizationRequestResolver;
 import org.springframework.security.oauth2.server.authorization.OAuth2TokenType;
 import org.springframework.security.oauth2.server.authorization.client.InMemoryRegisteredClientRepository;
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClient;
@@ -26,7 +27,7 @@ import org.springframework.security.oauth2.server.authorization.token.OAuth2Toke
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.LoginUrlAuthenticationEntryPoint;
 import org.springframework.security.web.util.matcher.MediaTypeRequestMatcher;
-
+import org.springframework.beans.factory.annotation.Value;
 import com.nimbusds.jose.jwk.JWKSet;
 import com.nimbusds.jose.jwk.RSAKey;
 import com.nimbusds.jose.jwk.source.ImmutableJWKSet;
@@ -68,10 +69,18 @@ public class AuthorizationServerConfig {
     }
 
     // Filter chain #2 — everything else: the login page itself
+    // Filter chain #2 — everything else: the login page itself
     @Bean
     @Order(2)
     public SecurityFilterChain defaultSecurityFilterChain(HttpSecurity http,
-                                                          GoogleOidcUserService googleOidcUserService) throws Exception {
+                                                          GoogleOidcUserService googleOidcUserService,
+                                                          ClientRegistrationRepository clientRegistrationRepository) throws Exception {
+        // Always ask Google which account to use
+        DefaultOAuth2AuthorizationRequestResolver googleRequestResolver =
+                new DefaultOAuth2AuthorizationRequestResolver(clientRegistrationRepository, "/oauth2/authorization");
+        googleRequestResolver.setAuthorizationRequestCustomizer(builder ->
+                builder.additionalParameters(params -> params.put("prompt", "select_account")));
+
         http
                 .cors(Customizer.withDefaults())
                 .csrf(csrf -> csrf.ignoringRequestMatchers("/register"))
@@ -82,6 +91,7 @@ public class AuthorizationServerConfig {
                 .formLogin(form -> form.defaultSuccessUrl("http://localhost:5173/login", false))
                 .oauth2Login(oauth -> oauth
                         .defaultSuccessUrl("http://localhost:5173/login", false)
+                        .authorizationEndpoint(endpoint -> endpoint.authorizationRequestResolver(googleRequestResolver))
                         .userInfoEndpoint(userInfo -> userInfo.oidcUserService(googleOidcUserService))
                 )
                 .logout(logout -> logout.logoutSuccessUrl("http://localhost:5173/login"));
@@ -90,7 +100,8 @@ public class AuthorizationServerConfig {
     }
 
     @Bean
-    public RegisteredClientRepository registeredClientRepository() {
+    public RegisteredClientRepository registeredClientRepository(PasswordEncoder passwordEncoder,
+                                                                 @Value("${REMINDER_CLIENT_SECRET}") String reminderClientSecret) {
         RegisteredClient reactClient=RegisteredClient.withId(UUID.randomUUID().toString())
                 .clientId("react-todo-app")
                 .clientAuthenticationMethod(ClientAuthenticationMethod.NONE)
@@ -104,7 +115,16 @@ public class AuthorizationServerConfig {
                         .accessTokenTimeToLive(Duration.ofMinutes(30))
                         .build())
                 .build();
-        return new InMemoryRegisteredClientRepository(reactClient);
+        RegisteredClient reminderClient = RegisteredClient.withId(UUID.randomUUID().toString())
+                .clientId("reminder-service")
+                .clientSecret(passwordEncoder.encode(reminderClientSecret))
+                .clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_BASIC)
+                .authorizationGrantType(AuthorizationGrantType.CLIENT_CREDENTIALS)
+                .scope("todos.internal")
+                .tokenSettings(TokenSettings.builder().accessTokenTimeToLive(Duration.ofMinutes(10)).build())
+                .build();
+
+        return new InMemoryRegisteredClientRepository(reactClient,reminderClient);
 
     }
 
