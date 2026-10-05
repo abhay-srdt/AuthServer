@@ -68,7 +68,7 @@ public class AuthorizationServerConfig {
         return http.build();
     }
 
-    // Filter chain #2 — everything else: the login page itself
+
     // Filter chain #2 — everything else: the login page itself
     @Bean
     @Order(2)
